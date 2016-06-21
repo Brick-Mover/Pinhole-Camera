@@ -77,7 +77,7 @@ class Canvas
 {
 public:
     Canvas(Surrounding walls,
-           int angle,
+           float angle,
            int height,
            int length,
            int near);
