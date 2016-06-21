@@ -21,7 +21,7 @@ using namespace std;
 
 void saveImg(vector<Pixel> pic, int length, int height);
 void initializeWalls(Surrounding& s);
-vector<Point> lerp(Point start, Point end, int nPoints);
+vector<Point> lerp(const Point& start, const Point& end, int nPoints);
 
 
 void eat_comment(ifstream &f)
@@ -127,11 +127,11 @@ int main() {
     Wall* r = new Wall(500, 500, 250, RIGHT);
     Surrounding s = Surrounding(f, b, l, r);
     initializeWalls(s);
-    Canvas* aCanvas = new Canvas(s, -M_PI/2, 200, 200, 500);
+    Canvas* aCanvas = new Canvas(s, -M_PI/2, 200, 200, 100);
     aCanvas->render();
     cout << "size of pic is " << aCanvas->get_pixels().size() << endl;
     vector<Pixel> result = aCanvas->get_pixels();
-    saveImg(result, 250, 250);
+    saveImg(result, 200, 200);
 }
 
 
@@ -143,15 +143,15 @@ void initializeWalls(Surrounding& s) {
 }
 
 
-Canvas::Canvas(Surrounding walls, int angle, int height, int length, int near)
+Canvas::Canvas(Surrounding walls, float angle, int height, int length, int near)
 {
     this->viewAngle = angle;
     this->walls = walls;
     this->height = height;
     this->length = length;
     this->near = near;
-    viewRange = atan(length/2.0/near);
-    cout << "view range: " << viewRange << endl;
+    viewRange = 2*atan(length/2.0/near);
+    // cout << "view range: " << viewRange << endl;
     pixels.reserve(height*length);
 }
 
@@ -160,24 +160,42 @@ void Canvas::render() {
     assert(viewRange < M_PI && viewRange > 0);
     
     float r = length/2.0/sin(viewRange/2);
-    float thetaStart = viewAngle - viewRange/2 - M_PI/2;
-    float thetaEnd = viewAngle + viewRange/2 - M_PI/2;
+    float thetaStart = viewAngle - viewRange/2;
+    float thetaEnd = viewAngle + viewRange/2;
+    cout << "viewAngle: " << viewAngle << endl;
+    cout << "viewRange: " << viewRange << endl;
+    cout << "r: " << r << endl;
+    cout << "thetaStart: " << thetaStart << endl;
+    cout << "thetaEnd: " << thetaEnd << endl;
+    
     for (int i = height - 1; i >= 0; i--) {
-#if DEBUG1
-        cout << "i: " << i << endl;
-#endif
         Point start = Point(r * cos(thetaStart), r * sin(thetaStart), i);
         Point end = Point(r * cos(thetaEnd), r * sin(thetaEnd), i);
+        
+//        cout << "start x: " << start.x << endl;
+//        cout << "start y: " << start.y << endl;
+//        cout << "start z: " << start.z << endl;
+//        
+//        cout << "end x: " << end.x << endl;
+//        cout << "end y: " << end.y << endl;
+//        cout << "end z: " << end.z << endl;
+        
         vector<Point> rowPoints = lerp(start, end, length);
         
         for (int j = 0; j < length; j++) {
-#if DEBUG1
-            cout << "j: " << j << endl;
-#endif
             Point p = rowPoints[j];
+            cout << "p.x " << p.x << endl;
+            cout << "p.y " << p.y << endl;
+            cout << "p.z " << p.z << endl;
+            
             vec3 dir = vec3(p.x, p.y, p.z);
             float theta = atan(p.x / p.y);
             theta += M_PI/2;    // adjust to 0 ~ 2π
+            
+            
+            cout << "theta " << theta << endl;
+            //exit(1);
+            
             WALLTYPE w;
             const double cAngle = M_PI/4;
             if (theta > cAngle && theta <= 3*cAngle)
@@ -188,7 +206,7 @@ void Canvas::render() {
                 w = FRONT;
             else
                 w = RIGHT;
-            //cout << "wall type: " << w << endl;
+            cout << "wall type: " << w << endl;
             Pixel aPixel = Pixel();
             
             switch (w) {
@@ -237,25 +255,25 @@ void Canvas::render() {
 bool Wall::isOnWall(Point p) const {
     switch (type) {
         case FRONT:
-            cout << "check front\n";
+            //cout << "check front\n";
             return abs(p.x + near) <= TOLERANCE &&
             abs(p.y) <= length/2 + TOLERANCE &&
             p.z <= height + TOLERANCE && p.z >= -TOLERANCE;
             break;
         case BACK:
-            cout << "check back\n";
+            //cout << "check back\n";
             return abs(p.x - near) <= TOLERANCE &&
             abs(p.y) <= length/2 + TOLERANCE &&
             p.z <= height + TOLERANCE && p.z >= -TOLERANCE;
             break;
         case LEFT:
-            cout << "check left\n";
+            //cout << "check left\n";
             return abs(p.y + near) <= TOLERANCE &&
             abs(p.x) <= length/2 + TOLERANCE &&
             p.z <= height + TOLERANCE && p.z >= -TOLERANCE;
             break;
         case RIGHT:
-            cout << "check right\n";
+            //cout << "check right\n";
             return abs(p.y - near) <= TOLERANCE &&
             abs(p.x) <= length/2 + TOLERANCE &&
             p.z <= height + TOLERANCE && p.z >= -TOLERANCE;
@@ -316,7 +334,7 @@ Point& Point::operator = (Point other) {
 }
 
 
-Pixel& Pixel::operator=(Pixel other) {
+Pixel& Pixel::operator = (Pixel other) {
     R = other.R;
     G = other.G;
     B = other.B;
@@ -370,8 +388,9 @@ Wall::Wall(int l, int h, int n, WALLTYPE t) {
 
 
 // linear interpolate between two points
-vector<Point> lerp(Point start, Point end, int nPoints) {
-    vector<Point> result(nPoints);
+vector<Point> lerp(const Point& start, const Point& end, int nPoints) {
+    vector<Point> result;
+    result.reserve(nPoints);
     float deltaX = (start.x - end.x) / nPoints;
     float deltaY = (start.y - end.y) / nPoints;
     float deltaZ = (start.z - end.z) / nPoints;
@@ -380,7 +399,14 @@ vector<Point> lerp(Point start, Point end, int nPoints) {
         float y = start.y + deltaY * i;
         float z = start.z + deltaZ * i;
         result.push_back(Point(x,y,z));
+        //cout << "x: " << x << " y: " << y << " z: " << z << endl;
     }
+    /*
+    cout << "double check x: " << result[0].x << endl;
+    cout << "double check y: " << result[0].y << endl;
+    cout << "double check z: " << result[0].z << endl;
+    */
+    
     return result;
 }
 
