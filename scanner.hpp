@@ -21,7 +21,8 @@ enum WALLTYPE {FRONT, BACK, LEFT, RIGHT};
 struct Point
 {
     Point(float x0, float y0, float z0) { x = x0; y = y0; z = z0; }
-    Point() { cout << "Error!"; exit(1); }
+    Point() { /* cout << "Error!"; exit(1); */ }
+    Point& operator = (Point other);
     float x;
     float y;
     float z;
@@ -38,13 +39,14 @@ struct Pixel
     //int a;
 };
 
-const Pixel grey_pixel = Pixel(138, 138, 138);
+const Pixel grey_pixel = Pixel(128, 128, 128);
 
 struct Wall
 {
     Wall(int l, int h, int n, WALLTYPE t);
     // Wall: Ax + By + Cz = D
-    float A, B, C, D;
+    float A, B, C;
+    int D;
     int length;
     int height;
     int near;
@@ -79,8 +81,10 @@ public:
            int height,
            int length,
            int near);
-    vector<Pixel> get_pixels() { return pixels; }
+    vector<Pixel> get_pixels() const { return pixels; }
     void render();
+    void renderPixel(int x, int y);
+    void setColor(int x, int y, Pixel& color);
     
 private:
     int height;
@@ -90,54 +94,7 @@ private:
     float viewRange;
     Surrounding walls;
     vector<Pixel> pixels;
-    
 };
-
-
-Surrounding::Surrounding(Wall* Front, Wall* Back, Wall* Left, Wall* Right)
-{
-    this->Front = Front;
-    this->Back = Back;
-    this->Left = Left;
-    this->Right = Right;
-}
-
-
-Wall::Wall(int l, int h, int n, WALLTYPE t) {
-    length = l;
-    height = h;
-    near = n;
-    type = t;
-    switch (t) {
-        case FRONT:
-            A = -1.0;
-            B = 0.0;
-            C = 0.0;
-            D = near;
-            break;
-        case BACK:
-            A = 1.0;
-            B = 0.0;
-            C = 0.0;
-            D = near;
-            break;
-        case LEFT:
-            A = 0.0;
-            B = -1.0;
-            C = 0.0;
-            D = near;
-            break;
-        case RIGHT:
-            A = 0.0;
-            B = 1.0;
-            C = 0.0;
-            D = near;
-            break;
-        default:
-            break;
-    }
-}
-
 
 
 
