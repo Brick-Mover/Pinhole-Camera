@@ -5,40 +5,142 @@
 //  Created by SHAO Jiuru on 6/16/16.
 //  Copyright © 2016 UCLA. All rights reserved.
 //
+
 #include "scanner.hpp"
 #include "vecm.h"
 #include "matm.h"
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <string.h>
 #include <vector>
+#define DEBUG1 0
 
 using namespace std;
 
-void loadImg();
-void savePPM(int width, int height, const char* fname, unsigned char* pixels);
-void saveImg();
-void initializeWalls();
+
+void saveImg(vector<Pixel> pic, int length, int height);
+void initializeWalls(Surrounding& s);
 vector<Point> lerp(Point start, Point end, int nPoints);
 
-// Helper functions
-vec4 toVec4(const string& s1, const string& s2, const string& s3, const string& s4);
-vec3 toVec3(const string& s1, const string& s2, const string& s3);
-float toFloat(const string& s);
 
-
-// USAGE: ./scanner viewAngle canvasHeight canvasWidth canvasNear
-int main(int argc, char** argv)
+void eat_comment(ifstream &f)
 {
-    Wall w = Wall(20, 20, 10, FRONT);
-    Point p = w.intersect(vec3(-5,5,1), Point(-1,0,0));
-    cout << "p.x: " << p.x << endl;
-    cout << "p.y: " << p.y << endl;
-    cout << "p.z: " << p.z << endl;
+    char linebuf[1024];
+    char ppp;
+    while (ppp = f.peek(), ppp == '\n' || ppp == '\r')
+        f.get();
+    if (ppp == '#')
+        f.getline(linebuf, 1023);
 }
 
 
+void load_ppm(Wall &img, const string &name)
+{
+    ifstream f(name.c_str(), ios::binary);
+    if (f.fail())
+    {
+        cout << "Could not open file: " << name << endl;
+        return;
+    }
+    
+    // get type of file
+    eat_comment(f);
+    int mode = 0;
+    string s;
+    f >> s;
+    if (s == "P3")
+        mode = 3;
+    else if (s == "P6")
+        mode = 6;
+    
+    // get w
+    eat_comment(f);
+    f >> img.length;
+    
+    // get h
+    eat_comment(f);
+    f >> img.height;
+    
+    // get bits
+    eat_comment(f);
+    int bits = 0;
+    f >> bits;
+    
+    // error checking
+    if (mode != 3 && mode != 6)
+    {
+        cout << "Unsupported magic number" << endl;
+        f.close();
+        return;
+    }
+    if (img.length < 1)
+    {
+        cout << "Unsupported width: " << img.length << endl;
+        f.close();
+        return;
+    }
+    if (img.height < 1)
+    {
+        cout << "Unsupported height: " << img.height << endl;
+        f.close();
+        return;
+    }
+    if (bits < 1 || bits > 255)
+    {
+        cout << "Unsupported number of bits: " << bits << endl;
+        f.close();
+        return;
+    }
+    
+    // load image data
+    img.pixels.resize(img.length * img.height);
+    
+    if (mode == 6)
+    {
+        f.get();
+        f.read((char*)&img.pixels[0], img.pixels.size() * 3);
+    }
+    else if (mode == 3)
+    {
+        for (int i = 0; i < img.pixels.size(); i++)
+        {
+            int v;
+            f >> v;
+            img.pixels[i].R = v;
+            f >> v;
+            img.pixels[i].G = v;
+            f >> v;
+            img.pixels[i].B = v;
+        }
+    }
+    
+    // close file
+    f.close();
+}
 
+
+int main() {
+    Wall* f = new Wall(500, 500, 250, FRONT);
+    Wall* b = new Wall(500, 500, 250, BACK);
+    Wall* l = new Wall(500, 500, 250, LEFT);
+    Wall* r = new Wall(500, 500, 250, RIGHT);
+    Surrounding s = Surrounding(f, b, l, r);
+    initializeWalls(s);
+    Canvas* aCanvas = new Canvas(s, -M_PI/2, 200, 200, 500);
+    aCanvas->render();
+    cout << "size of pic is " << aCanvas->get_pixels().size() << endl;
+    vector<Pixel> result = aCanvas->get_pixels();
+    saveImg(result, 250, 250);
+}
+
+
+void initializeWalls(Surrounding& s) {
+    load_ppm(*s.Front, "front.ppm");
+    load_ppm(*s.Back, "back.ppm");
+    load_ppm(*s.Left, "left.ppm");
+    load_ppm(*s.Right, "right.ppm");
+}
 
 
 Canvas::Canvas(Surrounding walls, int angle, int height, int length, int near)
@@ -49,21 +151,29 @@ Canvas::Canvas(Surrounding walls, int angle, int height, int length, int near)
     this->length = length;
     this->near = near;
     viewRange = atan(length/2.0/near);
+    cout << "view range: " << viewRange << endl;
+    pixels.reserve(height*length);
 }
 
 
 void Canvas::render() {
-    assert(viewAngle < M_PI && viewAngle > 0);
-    int count = 0;
+    assert(viewRange < M_PI && viewRange > 0);
+    
     float r = length/2.0/sin(viewRange/2);
     float thetaStart = viewAngle - viewRange/2 - M_PI/2;
     float thetaEnd = viewAngle + viewRange/2 - M_PI/2;
     for (int i = height - 1; i >= 0; i--) {
+#if DEBUG1
+        cout << "i: " << i << endl;
+#endif
         Point start = Point(r * cos(thetaStart), r * sin(thetaStart), i);
         Point end = Point(r * cos(thetaEnd), r * sin(thetaEnd), i);
         vector<Point> rowPoints = lerp(start, end, length);
         
         for (int j = 0; j < length; j++) {
+#if DEBUG1
+            cout << "j: " << j << endl;
+#endif
             Point p = rowPoints[j];
             vec3 dir = vec3(p.x, p.y, p.z);
             float theta = atan(p.x / p.y);
@@ -78,7 +188,9 @@ void Canvas::render() {
                 w = FRONT;
             else
                 w = RIGHT;
+            //cout << "wall type: " << w << endl;
             Pixel aPixel = Pixel();
+            
             switch (w) {
                 case FRONT:
                 {
@@ -101,43 +213,52 @@ void Canvas::render() {
                 case LEFT:
                 {
                     Point q = walls.Left->intersect(dir, p);
-                    aPixel = walls.Back->get_pixel(q);
+                    aPixel = walls.Left->get_pixel(q);
                     break;
                 }
                 default:
                     break;
             }
-            
+#if DEBUG1
+            cout << "color at i, j: " << aPixel.R << " " <<
+                aPixel.G << " " << aPixel.B << endl;
+#endif
             // convert (i,j) to a point on Canvas
-            pixels[count++] = aPixel;
+            pixels.push_back(aPixel);
+#if DEBUG1
+            cout << "pixel[" << count - 1 << "] is set to color\n";
+#endif
         }
     }
 }
 
 
+
 bool Wall::isOnWall(Point p) const {
     switch (type) {
         case FRONT:
+            cout << "check front\n";
             return abs(p.x + near) <= TOLERANCE &&
-            abs(length/2 - abs(p.y)) <= TOLERANCE &&
-            abs(height - p.z) <= TOLERANCE;
+            abs(p.y) <= length/2 + TOLERANCE &&
+            p.z <= height + TOLERANCE && p.z >= -TOLERANCE;
             break;
         case BACK:
+            cout << "check back\n";
             return abs(p.x - near) <= TOLERANCE &&
-            abs(length/2 - abs(p.y)) <= TOLERANCE &&
-            abs(height - p.z) <= TOLERANCE;
+            abs(p.y) <= length/2 + TOLERANCE &&
+            p.z <= height + TOLERANCE && p.z >= -TOLERANCE;
             break;
         case LEFT:
+            cout << "check left\n";
             return abs(p.y + near) <= TOLERANCE &&
-            abs(length/2 - abs(p.x)) <= TOLERANCE &&
-            abs(height - p.z) <= TOLERANCE;
+            abs(p.x) <= length/2 + TOLERANCE &&
+            p.z <= height + TOLERANCE && p.z >= -TOLERANCE;
             break;
         case RIGHT:
+            cout << "check right\n";
             return abs(p.y - near) <= TOLERANCE &&
-            abs(length/2 - abs(p.x)) <= TOLERANCE &&
-            abs(height - p.z) <= TOLERANCE;
-            break;
-        default:
+            abs(p.x) <= length/2 + TOLERANCE &&
+            p.z <= height + TOLERANCE && p.z >= -TOLERANCE;
             break;
     }
 }
@@ -178,11 +299,20 @@ Pixel Wall::get_pixel(Point p) const {
             case RIGHT:
                 col = int(p.x - length/2.0);
                 break;
-            default:
-                break;
         }
+        //int tt = row * length + col;
+        //cout << "return pixel[] " << tt << endl;
         return pixels[row * length + col];
+        //return grey_pixel;
     }
+}
+
+
+Point& Point::operator = (Point other) {
+    x = other.x;
+    y = other.y;
+    z = other.z;
+    return *this;
 }
 
 
@@ -191,6 +321,51 @@ Pixel& Pixel::operator=(Pixel other) {
     G = other.G;
     B = other.B;
     return *this;
+}
+
+
+Surrounding::Surrounding(Wall* Front, Wall* Back, Wall* Left, Wall* Right)
+{
+    this->Front = Front;
+    this->Back = Back;
+    this->Left = Left;
+    this->Right = Right;
+}
+
+
+Wall::Wall(int l, int h, int n, WALLTYPE t) {
+    length = l;
+    height = h;
+    near = n;
+    type = t;
+    switch (t) {
+        case FRONT:
+            A = -1.0;
+            B = 0.0;
+            C = 0.0;
+            D = near;
+            break;
+        case BACK:
+            A = 1.0;
+            B = 0.0;
+            C = 0.0;
+            D = near;
+            break;
+        case LEFT:
+            A = 0.0;
+            B = -1.0;
+            C = 0.0;
+            D = near;
+            break;
+        case RIGHT:
+            A = 0.0;
+            B = 1.0;
+            C = 0.0;
+            D = near;
+            break;
+        default:
+            break;
+    }
 }
 
 
@@ -209,32 +384,27 @@ vector<Point> lerp(Point start, Point end, int nPoints) {
     return result;
 }
 
-                    
-vec4 toVec4(const string& s1, const string& s2, const string& s3, const string& s4 = "1")
-{
-    stringstream ss(s1 + " " + s2 + " " + s3 + " " + s4);
-    vec4 result;
-    ss >> result.x >> result.y >> result.z >> result.w;
-    return result;
+
+void saveImg(vector<Pixel> pic, int length, int height) {
+    FILE *fp = fopen("result.ppm", "wb");
+    (void) fprintf(fp, "P6\n%d %d\n255\n", length, height);
+    int count = 0;
+    for (int j = 0; j < height; ++j)
+    {
+        for (int i = 0; i < length; ++i)
+        {
+            static unsigned char color[3];
+            color[0] = pic[count].R;  /* red */
+            color[1] = pic[count].G;  /* green */
+            color[2] = pic[count].B;  /* blue */
+            (void) fwrite(color, 1, 3, fp);
+            count++;
+        }
+    }
+    (void) fclose(fp);
 }
 
 
-vec3 toVec3(const string& s1, const string& s2, const string& s3)
-{
-    stringstream ss(s1 + " " + s2 + " " + s3);
-    vec3 result;
-    ss >> result.x >> result.y >> result.z;
-    return result;
-}
-
-
-float toFloat(const string& s)
-{
-    stringstream ss(s);
-    float f;
-    ss >> f;
-    return f;
-}
 
 
 
