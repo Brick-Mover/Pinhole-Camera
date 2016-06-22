@@ -15,7 +15,7 @@
 
 using namespace std;
 
-const float TOLERANCE = float(1.0e-07);
+const float TOLERANCE = float(1.0e-03);
 enum WALLTYPE {FRONT, BACK, LEFT, RIGHT};
 
 struct Point
@@ -26,6 +26,11 @@ struct Point
     float x;
     float y;
     float z;
+    void print() {
+        cout << "p.x: " << x << endl;
+        cout << "p.y: " << y << endl;
+        cout << "p.z: " << z << endl;
+    }
 };
 
 struct Pixel
@@ -33,10 +38,15 @@ struct Pixel
     Pixel(int r, int g, int b) {R = r; G = g; B = b;}
     Pixel() {}
     Pixel& operator = (Pixel other);
-    int R;
-    int G;
-    int B;
+    unsigned char R;
+    unsigned char G;
+    unsigned char B;
     //int a;
+    void print() const {
+        cout << "p.R: " << int(R) << endl;
+        cout << "p.G: " << int(G) << endl;
+        cout << "p.B: " << int(B) << endl;
+    }
 };
 
 const Pixel grey_pixel = Pixel(128, 128, 128);
@@ -52,7 +62,7 @@ struct Wall
     int near;
     WALLTYPE type;
     vector<Pixel> pixels;
-    
+
     
     // detect if a given point is on the wall
     bool isOnWall(Point p) const;
