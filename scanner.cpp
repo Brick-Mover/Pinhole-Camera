@@ -127,36 +127,38 @@ int main() {
     Wall* r = new Wall(500, 500, 250, RIGHT);
     Surrounding s = Surrounding(f, b, l, r);
     initializeWalls(s);
-    Canvas* aCanvas = new Canvas(s, -M_PI/4, 200, 200, 100);
-    
+    Canvas* aCanvas = new Canvas(s, M_PI/2, 300, 200, 250, 100,
+                                 Point(0.0,0.0,250));
     
     aCanvas->render();
     cout << "size of pic is " << aCanvas->get_pixels().size() << endl;
     vector<Pixel> result = aCanvas->get_pixels();
-    saveImg(result, 200, 200);
+    saveImg(result, 300, 200);
 }
 
 
 
-Canvas::Canvas(Surrounding walls, float angle, int height, int length, int near)
+Canvas::Canvas(Surrounding walls, float angle, int x, int y, int height, int near, const Point& eye)
 {
     this->viewAngle = angle;
     this->walls = walls;
-    this->height = height;
-    this->length = length;
+    this->xDim = x;
+    this->yDim = y;
     this->near = near;
-    viewRange = 2*atan(length/2.0/near);
+    this->eye = eye;
+    this->height = height;
+    viewRange = 2*atan(xDim/2.0/near);
     // cout << "view range: " << viewRange << endl;
-    pixels.reserve(height*length);
+    pixels.reserve(yDim*xDim);
 }
 
 
 void Canvas::render() {
     assert(viewRange < M_PI && viewRange > 0);
     
-    int count = 0;
+    //int count = 0;
     
-    float r = length/2.0/sin(viewRange/2);
+    float r = xDim/2.0/sin(viewRange/2);
     float thetaStart = viewAngle + viewRange/2;
     float thetaEnd = viewAngle - viewRange/2;
     cout << "viewAngle: " << viewAngle << endl;
@@ -165,20 +167,20 @@ void Canvas::render() {
     cout << "thetaStart: " << thetaStart << endl;
     cout << "thetaEnd: " << thetaEnd << endl;
     
-    for (int i = height - 1; i >= 0; i--) {
-        Point start = Point(r*cos(thetaStart), r*sin(thetaStart), i);
-        Point end = Point(r*cos(thetaEnd), r*sin(thetaEnd), i);
+    for (int i = yDim - 1; i >= 0; i--) {
+        Point start = Point(r*cos(thetaStart), r*sin(thetaStart), i + (height - yDim/2));
+        Point end = Point(r*cos(thetaEnd), r*sin(thetaEnd), i + (height - yDim/2));
         
-        // start.print();
-        // end.print();
+        vector<Point> rowPoints = lerp(start, end, xDim);
         
-        vector<Point> rowPoints = lerp(start, end, length);
-        
-        for (int j = 0; j < length; j++) {
+        for (int j = 0; j < xDim; j++) {
             Point p = rowPoints[j];
-
             
-            vec3 dir = vec3(p.x, p.y, p.z);
+            vec3 dir = vec3(p.x-eye.x, p.y-eye.y, p.z-eye.z);
+            
+//            cout << "dir.x " << p.x << endl;
+//            cout << "dir.y " << p.y << endl;
+//            cout << "dir.z " << p.z << endl;
             
             WALLTYPE w;
             // determine on which wall is the point
@@ -203,7 +205,6 @@ void Canvas::render() {
             //cout << "wall type: " << w << endl;
             
             Pixel aPixel = Pixel();
-            Point eye = Point(0.0, 0.0, 0.0);
             
             switch (w) {
                 case FRONT:
@@ -256,11 +257,7 @@ bool Wall::isOnWall(Point p) const {
             p.z <= height + TOLERANCE && p.z >= -TOLERANCE;
             break;
         case LEFT:
-            // cout << "check left\n";
-//            cout << "abs(p.x + near): " << abs(p.x + near) << endl;
-//            cout << "abs(p.y): " << abs(p.y) << endl;
-//            cout << "p.z: " << p.z << endl;
-//            cout << "height: " << height << endl;
+            //cout << "check left\n";
             return abs(p.x + near) <= TOLERANCE &&
             abs(p.y) <= length/2 + TOLERANCE &&
             p.z <= height + TOLERANCE && p.z >= -TOLERANCE;
@@ -288,9 +285,9 @@ Point Wall::intersect(vec3 dir, Point p) const {
         exit(1);
     }
     else {
-        cout << "p.x: " << p.x + dir.x*t;
-        cout << "\np.y: " << p.y + dir.y*t;
-        cout << "\np.z: " << p.z + dir.z*t << endl;
+//        cout << "p.x: " << p.x + dir.x*t;
+//        cout << "\np.y: " << p.y + dir.y*t;
+//        cout << "\np.z: " << p.z + dir.z*t << endl;
         return Point(p.x + dir.x*t, p.y + dir.y*t, p.z + dir.z*t);
     }
 }
@@ -299,8 +296,8 @@ Point Wall::intersect(vec3 dir, Point p) const {
 Pixel Wall::get_pixel(Point p) const {
     // if the point is not on the wall, fill the canvas with grey
     if (!isOnWall(p)) {
-        // cout << "!is not on wall!\n";
-        // p.print();
+        cout << "!is not on wall!\n";
+        p.print();
         return grey_pixel;
     }
     else {
@@ -323,7 +320,7 @@ Pixel Wall::get_pixel(Point p) const {
 //        cout << "row at wall: " << row << endl;
 //        cout << "col at wall: " << col << endl;
         
-        //pixels[row * length + col].print();
+        pixels[row * length + col].print();
         
         return pixels[row * length + col];
         
