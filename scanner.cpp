@@ -20,7 +20,7 @@ using namespace std;
 
 
 void saveImg(vector<Pixel> pic, int length, int height);
-void initializeWalls(Surrounding& s);
+void initializeWalls(const Surrounding& s);
 vector<Point> lerp(const Point& start, const Point& end, int nPoints);
 
 
@@ -35,7 +35,7 @@ void eat_comment(ifstream &f)
 }
 
 
-void load_ppm(Wall &img, const string &name)
+void load_ppm(Wall* img, const string &name)
 {
     ifstream f(name.c_str(), ios::binary);
     if (f.fail())
@@ -56,11 +56,11 @@ void load_ppm(Wall &img, const string &name)
     
     // get w
     eat_comment(f);
-    f >> img.length;
+    f >> img->length;
     
     // get h
     eat_comment(f);
-    f >> img.height;
+    f >> img->height;
     
     // get bits
     eat_comment(f);
@@ -74,15 +74,15 @@ void load_ppm(Wall &img, const string &name)
         f.close();
         return;
     }
-    if (img.length < 1)
+    if (img->length < 1)
     {
-        cout << "Unsupported width: " << img.length << endl;
+        cout << "Unsupported width: " << img->length << endl;
         f.close();
         return;
     }
-    if (img.height < 1)
+    if (img->height < 1)
     {
-        cout << "Unsupported height: " << img.height << endl;
+        cout << "Unsupported height: " << img->height << endl;
         f.close();
         return;
     }
@@ -94,24 +94,24 @@ void load_ppm(Wall &img, const string &name)
     }
     
     // load image data
-    img.pixels.resize(img.length * img.height);
+    img->pixels.resize(img->length * img->height);
     
     if (mode == 6)
     {
         f.get();
-        f.read((char*)&img.pixels[0], img.pixels.size() * 3);
+        f.read((char*)&img->pixels[0], img->pixels.size() * 3);
     }
     else if (mode == 3)
     {
-        for (int i = 0; i < img.pixels.size(); i++)
+        for (int i = 0; i < img->pixels.size(); i++)
         {
             int v;
             f >> v;
-            img.pixels[i].R = v;
+            img->pixels[i].R = v;
             f >> v;
-            img.pixels[i].G = v;
+            img->pixels[i].G = v;
             f >> v;
-            img.pixels[i].B = v;
+            img->pixels[i].B = v;
         }
     }
     
@@ -127,20 +127,15 @@ int main() {
     Wall* r = new Wall(500, 500, 250, RIGHT);
     Surrounding s = Surrounding(f, b, l, r);
     initializeWalls(s);
-    Canvas* aCanvas = new Canvas(s, -M_PI/2, 200, 200, 100);
+    Canvas* aCanvas = new Canvas(s, -M_PI/4, 200, 200, 100);
+    
+    
     aCanvas->render();
     cout << "size of pic is " << aCanvas->get_pixels().size() << endl;
     vector<Pixel> result = aCanvas->get_pixels();
     saveImg(result, 200, 200);
 }
 
-
-void initializeWalls(Surrounding& s) {
-    load_ppm(*s.Front, "front.ppm");
-    load_ppm(*s.Back, "back.ppm");
-    load_ppm(*s.Left, "left.ppm");
-    load_ppm(*s.Right, "right.ppm");
-}
 
 
 Canvas::Canvas(Surrounding walls, float angle, int height, int length, int near)
@@ -159,9 +154,11 @@ Canvas::Canvas(Surrounding walls, float angle, int height, int length, int near)
 void Canvas::render() {
     assert(viewRange < M_PI && viewRange > 0);
     
+    int count = 0;
+    
     float r = length/2.0/sin(viewRange/2);
-    float thetaStart = viewAngle - viewRange/2;
-    float thetaEnd = viewAngle + viewRange/2;
+    float thetaStart = viewAngle + viewRange/2;
+    float thetaEnd = viewAngle - viewRange/2;
     cout << "viewAngle: " << viewAngle << endl;
     cout << "viewRange: " << viewRange << endl;
     cout << "r: " << r << endl;
@@ -169,113 +166,109 @@ void Canvas::render() {
     cout << "thetaEnd: " << thetaEnd << endl;
     
     for (int i = height - 1; i >= 0; i--) {
-        Point start = Point(r * cos(thetaStart), r * sin(thetaStart), i);
-        Point end = Point(r * cos(thetaEnd), r * sin(thetaEnd), i);
+        Point start = Point(r*cos(thetaStart), r*sin(thetaStart), i);
+        Point end = Point(r*cos(thetaEnd), r*sin(thetaEnd), i);
         
-//        cout << "start x: " << start.x << endl;
-//        cout << "start y: " << start.y << endl;
-//        cout << "start z: " << start.z << endl;
-//        
-//        cout << "end x: " << end.x << endl;
-//        cout << "end y: " << end.y << endl;
-//        cout << "end z: " << end.z << endl;
+        // start.print();
+        // end.print();
         
         vector<Point> rowPoints = lerp(start, end, length);
         
         for (int j = 0; j < length; j++) {
             Point p = rowPoints[j];
-            cout << "p.x " << p.x << endl;
-            cout << "p.y " << p.y << endl;
-            cout << "p.z " << p.z << endl;
+
             
             vec3 dir = vec3(p.x, p.y, p.z);
-            float theta = atan(p.x / p.y);
-            theta += M_PI/2;    // adjust to 0 ~ 2π
-            
-            
-            cout << "theta " << theta << endl;
-            //exit(1);
             
             WALLTYPE w;
-            const double cAngle = M_PI/4;
-            if (theta > cAngle && theta <= 3*cAngle)
-                w = BACK;
-            else if (theta > 3*cAngle && theta <= 5*cAngle)
-                w = LEFT;
-            else if (theta > 5*cAngle && theta <= 7*cAngle)
-                w = FRONT;
-            else
-                w = RIGHT;
-            cout << "wall type: " << w << endl;
+            // determine on which wall is the point
+            if (p.x >= 0 && p.y > 0) {
+                if (p.x >= p.y)
+                    w = RIGHT;
+                else w = FRONT;
+            } else if (p.x > 0 && p.y <= 0) {
+                if (p.x >= -p.y)
+                    w = RIGHT;
+                else w = BACK;
+            } else if (p.x <= 0 && p.y < 0) {
+                if (-p.x >= -p.y)
+                    w = LEFT;
+                else w = BACK;
+            } else if (p.x < 0 && p.y >= 0) {
+                if (-p.x >= p.y)
+                    w = LEFT;
+                else w = FRONT;
+            }
+                
+            //cout << "wall type: " << w << endl;
+            
             Pixel aPixel = Pixel();
+            Point eye = Point(0.0, 0.0, 0.0);
             
             switch (w) {
                 case FRONT:
                 {
-                    Point q = walls.Front->intersect(dir, p);
+                    Point q = walls.Front->intersect(dir, eye);
                     aPixel = walls.Front->get_pixel(q);
                     break;
                 }
                 case RIGHT:
                 {
-                    Point q = walls.Right->intersect(dir, p);
+                    Point q = walls.Right->intersect(dir, eye);
                     aPixel = walls.Right->get_pixel(q);
                     break;
                 }
                 case BACK:
                 {
-                    Point q = walls.Back->intersect(dir, p);
+                    Point q = walls.Back->intersect(dir, eye);
                     aPixel = walls.Back->get_pixel(q);
                     break;
                 }
                 case LEFT:
                 {
-                    Point q = walls.Left->intersect(dir, p);
+                    Point q = walls.Left->intersect(dir, eye);
                     aPixel = walls.Left->get_pixel(q);
                     break;
                 }
-                default:
-                    break;
             }
-#if DEBUG1
-            cout << "color at i, j: " << aPixel.R << " " <<
-                aPixel.G << " " << aPixel.B << endl;
-#endif
-            // convert (i,j) to a point on Canvas
+
+            // cout << "color at " << count++ << " is \n";
+            // aPixel.print();
+
             pixels.push_back(aPixel);
-#if DEBUG1
-            cout << "pixel[" << count - 1 << "] is set to color\n";
-#endif
         }
     }
 }
-
 
 
 bool Wall::isOnWall(Point p) const {
     switch (type) {
         case FRONT:
             //cout << "check front\n";
-            return abs(p.x + near) <= TOLERANCE &&
-            abs(p.y) <= length/2 + TOLERANCE &&
+            return abs(p.y - near) <= TOLERANCE &&
+            abs(p.x) <= length/2 + TOLERANCE &&
             p.z <= height + TOLERANCE && p.z >= -TOLERANCE;
             break;
         case BACK:
             //cout << "check back\n";
-            return abs(p.x - near) <= TOLERANCE &&
-            abs(p.y) <= length/2 + TOLERANCE &&
-            p.z <= height + TOLERANCE && p.z >= -TOLERANCE;
-            break;
-        case LEFT:
-            //cout << "check left\n";
             return abs(p.y + near) <= TOLERANCE &&
             abs(p.x) <= length/2 + TOLERANCE &&
             p.z <= height + TOLERANCE && p.z >= -TOLERANCE;
             break;
+        case LEFT:
+            // cout << "check left\n";
+//            cout << "abs(p.x + near): " << abs(p.x + near) << endl;
+//            cout << "abs(p.y): " << abs(p.y) << endl;
+//            cout << "p.z: " << p.z << endl;
+//            cout << "height: " << height << endl;
+            return abs(p.x + near) <= TOLERANCE &&
+            abs(p.y) <= length/2 + TOLERANCE &&
+            p.z <= height + TOLERANCE && p.z >= -TOLERANCE;
+            break;
         case RIGHT:
             //cout << "check right\n";
-            return abs(p.y - near) <= TOLERANCE &&
-            abs(p.x) <= length/2 + TOLERANCE &&
+            return abs(p.x - near) <= TOLERANCE &&
+            abs(p.y) <= length/2 + TOLERANCE &&
             p.z <= height + TOLERANCE && p.z >= -TOLERANCE;
             break;
     }
@@ -285,42 +278,55 @@ bool Wall::isOnWall(Point p) const {
 Point Wall::intersect(vec3 dir, Point p) const {
     // Ax+By+Cz = D intersect (x0,y0,z0)+(a,b,c)t
     // t = [D - (Ax0+By0+Cz0)] / (Aa+Bb+Cc)
-    
+    // cout << "A*dir.x + B*dir.y + C*dir.z: " << A*dir.x + B*dir.y + C*dir.z << endl;
     if ((A*dir.x + B*dir.y + C*dir.z) == 0) {
         return Point(0.0, 0.0, 0.0);
     }
     float t = (D - A*p.x - B*p.y - C*p.z) / (A*dir.x + B*dir.y + C*dir.z);
-    if (t <= 0)
-        return Point(0.0, 0.0, 0.0);
-    else
+    if (t <= 0) {
+        cout << "wrong!" << endl;
+        exit(1);
+    }
+    else {
+        cout << "p.x: " << p.x + dir.x*t;
+        cout << "\np.y: " << p.y + dir.y*t;
+        cout << "\np.z: " << p.z + dir.z*t << endl;
         return Point(p.x + dir.x*t, p.y + dir.y*t, p.z + dir.z*t);
+    }
 }
 
 
 Pixel Wall::get_pixel(Point p) const {
     // if the point is not on the wall, fill the canvas with grey
-    if (!isOnWall(p))
+    if (!isOnWall(p)) {
+        // cout << "!is not on wall!\n";
+        // p.print();
         return grey_pixel;
+    }
     else {
-        int row = int(height - p.z);
+        int row = int(height - p.z - 1);
         int col = 0;
         switch (type) {
             case FRONT:
-                col = int(p.y + length/2.0);
+                col = int(p.x + length/2.0);
                 break;
             case BACK:
-                col = int(p.y - length/2.0);
+                col = int(-p.x + length/2.0);
                 break;
             case LEFT:
-                col = int(p.x - length/2.0);
+                col = int(p.y + length/2.0);
                 break;
             case RIGHT:
-                col = int(p.x - length/2.0);
+                col = int(-p.y + length/2.0);
                 break;
         }
-        //int tt = row * length + col;
-        //cout << "return pixel[] " << tt << endl;
+//        cout << "row at wall: " << row << endl;
+//        cout << "col at wall: " << col << endl;
+        
+        //pixels[row * length + col].print();
+        
         return pixels[row * length + col];
+        
         //return grey_pixel;
     }
 }
@@ -358,26 +364,26 @@ Wall::Wall(int l, int h, int n, WALLTYPE t) {
     type = t;
     switch (t) {
         case FRONT:
-            A = -1.0;
-            B = 0.0;
+            A = 0.0;
+            B = 1.0;
             C = 0.0;
             D = near;
             break;
         case BACK:
-            A = 1.0;
-            B = 0.0;
-            C = 0.0;
-            D = near;
-            break;
-        case LEFT:
             A = 0.0;
             B = -1.0;
             C = 0.0;
             D = near;
             break;
+        case LEFT:
+            A = -1.0;
+            B = 0.0;
+            C = 0.0;
+            D = near;
+            break;
         case RIGHT:
-            A = 0.0;
-            B = 1.0;
+            A = 1.0;
+            B = 0.0;
             C = 0.0;
             D = near;
             break;
@@ -391,13 +397,13 @@ Wall::Wall(int l, int h, int n, WALLTYPE t) {
 vector<Point> lerp(const Point& start, const Point& end, int nPoints) {
     vector<Point> result;
     result.reserve(nPoints);
-    float deltaX = (start.x - end.x) / nPoints;
-    float deltaY = (start.y - end.y) / nPoints;
-    float deltaZ = (start.z - end.z) / nPoints;
+    float deltaX = (end.x - start.x) / nPoints;
+    float deltaY = (end.y - start.y) / nPoints;
+    float deltaZ = (end.z - start.z) / nPoints;
     for (int i = 0; i < nPoints; i++) {
-        float x = start.x + deltaX * i;
-        float y = start.y + deltaY * i;
-        float z = start.z + deltaZ * i;
+        float x = start.x + deltaX * i + deltaX * 0.5;
+        float y = start.y + deltaY * i + deltaY * 0.5;
+        float z = start.z + deltaZ * i + deltaZ * 0.5;
         result.push_back(Point(x,y,z));
         //cout << "x: " << x << " y: " << y << " z: " << z << endl;
     }
@@ -430,6 +436,13 @@ void saveImg(vector<Pixel> pic, int length, int height) {
     (void) fclose(fp);
 }
 
+
+void initializeWalls(const Surrounding& s) {
+    load_ppm(s.Front, "front.ppm");
+    load_ppm(s.Back, "back.ppm");
+    load_ppm(s.Left, "left.ppm");
+    load_ppm(s.Right, "right.ppm");
+}
 
 
 
