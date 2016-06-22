@@ -88,20 +88,23 @@ class Canvas
 public:
     Canvas(Surrounding walls,
            float angle,
+           int xDim,
+           int yDim,
            int height,
-           int length,
-           int near);
+           int near, const Point& eye);
     vector<Pixel> get_pixels() const { return pixels; }
     void render();
     void renderPixel(int x, int y);
     void setColor(int x, int y, Pixel& color);
     
 private:
-    int height;
-    int length;
+    int xDim;
+    int yDim;   // the size of canvas
     int near;
+    int height; // the z coordinate of Canvas Center
     float viewAngle;
     float viewRange;
+    Point eye;
     Surrounding walls;
     vector<Pixel> pixels;
 };
