@@ -1,6 +1,6 @@
 //
-//  camera.cpp
-//  Fisheye Camera
+//  pinhole.cpp
+//  Pinhole Camera
 //
 //  Created by SHAO Jiuru on 6/25/16.
 //  Copyright © 2016 UCLA. All rights reserved.
